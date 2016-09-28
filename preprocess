@@ -1,0 +1,119 @@
+#!/usr/bin/env ruby
+
+$csv_file = "follower_sample_data.cvs"
+
+def preprocess_file input_file, output_file
+    File.open(output_file, "w") do |output|
+        File.open(input_file, "r") do |input|
+            input.each_line do |line|
+                data = line.split(/\s/)
+                yield output, data[0], data[1]
+            end
+        end
+    end
+end
+
+
+def followed_count
+    hash = {}
+    preprocess_file $csv_file, "followee.csv" do |f, followed, follower|
+        hash[followed] = 0 unless hash.has_key? followed
+        hash[followed] += 1
+    end
+    File.open("followee.csv", "w") do |f|
+        f.write "followed, count\n"
+        hash.each do |followed, count|
+            f.write "#{followed}, #{count}\n"
+        end
+    end
+end
+
+def follower_count
+    hash = {}
+    output_file = "data/follower.csv"
+    preprocess_file $csv_file, output_file do |f, followed, follower|
+        hash[follower] = 0 unless hash.has_key? follower
+        hash[follower] += 1
+    end
+    File.open(output_file, "w") do |f|
+        f.write "follower, count\n"
+        hash.each do |follower, count|
+            f.write "#{follower}, #{count}\n"
+        end
+    end
+end
+
+def followed_followers filename
+    hash = {}
+    output_file = "data/followed_followers.csv"
+    count = 0
+    progress_frequence = 20000000 / 40
+    puts "building hash"
+    preprocess_file filename, output_file do |f, followed, follower|
+        count += 1
+        print "#" if count % progress_frequence == 0
+        hash[followed] = [] unless hash.has_key? followed
+        hash[followed] << follower
+    end
+
+    count = 0
+    puts "\nwriteing data to file"
+    progress_frequence = hash.count / 40
+    File.open(output_file, "w") do |f|
+        hash.each do |followed, followers|
+            count += 1
+            print "#" if count % progress_frequence == 0
+            followers_string = followers.sort.join(", ")
+            f.write "#{followed}; #{followers_string}\n"
+        end
+    end
+end
+
+def follower_following filename
+    hash = {}
+    output_file = "data/follower_following.csv"
+    puts "building hash"
+    count = 0
+    progress_frequence = 20000000 / 40
+    preprocess_file filename, output_file do |f, followed, follower|
+        count += 1
+        print "#" if count % progress_frequence == 0
+        hash[follower] = [] unless hash.has_key? follower
+        hash[follower] << followed
+    end
+
+    count = 0
+    progress_frequence = hash.count / 40
+    puts "\nwriteing data to file"
+    File.open(output_file, "w") do |f|
+        hash.each do |follower, following|
+            count += 1
+            print "#" if count % progress_frequence == 0
+            following_string = following.sort.join(", ")
+            f.write "#{follower}; #{following_string}\n"
+        end
+    end
+end
+
+def main
+    if ARGV.count < 2
+        puts "Usage: preprocess file <follower|followed>"
+        exit
+    end
+    filename = ARGV[0]
+    ARGV.shift
+    ARGV.each do |command|
+        case command
+        when "follower"
+            puts "extracting follower -> following"
+            follower_following filename
+        when "followed"
+            puts "extracting followee -> followers"
+            followed_followers filename
+        else
+            puts "Invalid command: " + command
+        end
+    end
+end
+
+main
